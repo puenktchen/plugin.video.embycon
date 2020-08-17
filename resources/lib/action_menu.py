@@ -34,7 +34,7 @@ class ActionAutoClose(threading.Thread):
                 self.parent_dialog.close()
                 break
 
-            xbmc.sleep(1000)
+            monitor.waitForAbort(0.5)
 
         log.debug("ActionAutoClose Exited")
 
