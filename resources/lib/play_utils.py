@@ -1004,29 +1004,36 @@ def send_progress(monitor):
     play_data = get_playing_data(monitor.played_information)
 
     if play_data is None:
+        log.debug("Sending progress aborted: play_data is none")
         return
 
-    log.debug("Sending Progress Update")
+    playback_type = play_data.get("playback_type")
+    item_id = play_data.get("item_id")
+    source_id = play_data.get("source_id")
+    play_session_id = play_data.get("play_session_id", "")
+    live_stream_id = play_data.get("live_stream_id", "")
+
+    if item_id is None:
+        log.debug("Sending progress aborted: item_id is none")
+        return
 
     player = xbmc.Player()
     play_time = player.getTime()
     total_play_time = player.getTotalTime()
+
+    if total_play_time is None or total_play_time <= 0:
+        if live_stream_id is None:
+            log.debug("Sending progress aborted: total_play_time is none")
+            return
+
     play_data["currentPossition"] = play_time
     play_data["duration"] = total_play_time
     play_data["currently_playing"] = True
-
-    item_id = play_data.get("item_id")
-    if item_id is None:
-        return
-
-    source_id = play_data.get("source_id")
+    play_data["paused"] = bool(HomeWindow().get_property("playback_is_paused"))
 
     ticks = int(play_time * 10000000)
     duration = int(total_play_time * 10000000)
     paused = play_data.get("paused", False)
-    playback_type = play_data.get("playback_type")
-    play_session_id = play_data.get("play_session_id", "")
-    live_stream_id = play_data.get("live_stream_id", "")
 
     playlist = xbmc.PlayList(xbmc.PLAYLIST_VIDEO)
     playlist_position = playlist.getposition()
@@ -1037,21 +1044,19 @@ def send_progress(monitor):
     postdata = {
         'QueueableMediaTypes': "Video",
         'CanSeek': True,
-        'ItemId': item_id,
-        'MediaSourceId': source_id,
         'IsPaused': paused,
         'IsMuted': muted,
+        'VolumeLevel': volume,
         'PlayMethod': playback_type,
+        'ItemId': item_id,
+        'MediaSourceId': source_id,
         'PlaySessionId': play_session_id,
         'LiveStreamId': live_stream_id,
+        'RunTimeTicks': duration,
+        'PositionTicks': ticks,
         'PlaylistIndex': playlist_position,
-        'PlaylistLength': playlist_size,
-        'VolumeLevel': volume
+        'PlaylistLength': playlist_size
     }
-
-    if duration is not None and duration > 0:
-        postdata["RunTimeTicks"] = duration
-        postdata["PositionTicks"] = ticks
 
     log.debug("Sending POST progress started: {0}", postdata)
     url = "{server}/emby/Sessions/Playing/Progress"
@@ -1156,6 +1161,7 @@ def stop_all_playback(played_information):
 
     home_screen = HomeWindow()
     home_screen.clear_property("currently_playing_id")
+    home_screen.clear_property("playback_is_paused")
 
     for item_url in played_information:
         data = played_information.get(item_url)
@@ -1197,17 +1203,13 @@ def get_playing_data(play_data_map):
     try:
         playing_file = xbmc.Player().getPlayingFile()
     except Exception as e:
-        log.error("get_playing_data : getPlayingFile() : {0}", e)
+        log.error("get_playing_data: getPlayingFile(): {0}", e)
         return None
-    log.debug("get_playing_data : getPlayingFile() : {0}", playing_file)
+
+    log.debug("get_playing_data: getPlayingFile(): {0}", playing_file)
     if playing_file not in play_data_map:
-        infolabel_path_and_file = xbmc.getInfoLabel("Player.Filenameandpath")
-        log.debug("get_playing_data : Filenameandpath : {0}", infolabel_path_and_file)
-        if infolabel_path_and_file not in play_data_map:
-            log.debug("get_playing_data : play data not found")
-            return None
-        else:
-            playing_file = infolabel_path_and_file
+        log.debug("get_playing_data : play data not found")
+        return None
 
     return play_data_map.get(playing_file)
 
@@ -1222,6 +1224,9 @@ class Service(xbmc.Player):
         # Will be called when xbmc starts playing a file
         log.debug("onPlayBackStarted")
 
+        home_screen = HomeWindow()
+        home_screen.clear_property("playback_is_paused")
+
         if not xbmc.Player().isPlaying():
             log.debug("onPlayBackStarted: not playing file!")
             return
@@ -1232,12 +1237,12 @@ class Service(xbmc.Player):
             stop_all_playback(self.played_information)
             return
 
-        play_data["paused"] = False
         play_data["currently_playing"] = True
+        play_data["paused"] = False
 
+        playback_type = play_data["playback_type"]
         emby_item_id = play_data["item_id"]
         emby_source_id = play_data["source_id"]
-        playback_type = play_data["playback_type"]
         play_session_id = play_data["play_session_id"]
         live_stream_id = play_data["live_stream_id"]
 
@@ -1245,24 +1250,22 @@ class Service(xbmc.Player):
         if emby_item_id is None:
             return
 
+        home_screen.set_property("currently_playing_id", str(emby_item_id))
+
         log.debug("Sending Playback Started")
         postdata = {
             'QueueableMediaTypes': "Video",
             'CanSeek': True,
+            'PlayMethod': playback_type,
             'ItemId': emby_item_id,
             'MediaSourceId': emby_source_id,
-            'PlayMethod': playback_type,
             'PlaySessionId': play_session_id,
             'LiveStreamId': live_stream_id
         }
 
         log.debug("Sending POST play started: {0}", postdata)
-
         url = "{server}/emby/Sessions/Playing"
         download_utils.download_url(url, post_body=postdata, method="POST")
-
-        home_screen = HomeWindow()
-        home_screen.set_property("currently_playing_id", str(emby_item_id))
 
         # start the skip intro monitor
         intro_start = play_data.get("intro_start", 0)
@@ -1298,27 +1301,22 @@ class Service(xbmc.Player):
 
     def onPlayBackPaused(self):
         # Will be called when kodi pauses the video
-        log.info("onPlayBackPaused")
-
-        play_data = get_playing_data(self.played_information)
-
-        if play_data is not None:
-            play_data['paused'] = True
-            send_progress(self)
+        log.debug("onPlayBackPaused")
+        home_screen = HomeWindow()
+        home_screen.set_property("playback_is_paused", "true")
+        send_progress(self)
 
     def onPlayBackResumed(self):
         # Will be called when kodi resumes the video
-        log.info("onPlayBackResumed")
-
-        play_data = get_playing_data(self.played_information)
-
-        if play_data is not None:
-            play_data['paused'] = False
+        log.debug("onPlayBackResumed")
+        home_screen = HomeWindow()
+        if home_screen.get_property("playback_is_paused"):
+            home_screen.clear_property("playback_is_paused")
             send_progress(self)
 
     def onPlayBackSeek(self, time, seek_offset):
         # Will be called when kodi seeks in video
-        log.info("onPlayBackSeek")
+        log.debug("onPlayBackSeek")
         send_progress(self)
 
 
