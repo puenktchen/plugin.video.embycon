@@ -158,6 +158,10 @@ msgctxt "#30116"
 msgid "Add unwatched counts to names"
 msgstr ""
 
+msgctxt "#30117"
+msgid "User premiered date as date added"
+msgstr ""
+
 msgctxt "#30118"
 msgid "Add resume percent to names"
 msgstr ""
@@ -1096,4 +1100,36 @@ msgstr ""
 
 msgctxt "#30447"
 msgid "Flatten All"
+msgstr ""
+
+msgctxt "#30448"
+msgid "Force transcode av1"
+msgstr ""
+
+msgctxt "#30449"
+msgid "Max Image Width"
+msgstr ""
+
+msgctxt "#30450"
+msgid "Movies view ID"
+msgstr ""
+
+msgctxt "#30451"
+msgid "TV Shows view ID"
+msgstr ""
+
+msgctxt "#30452"
+msgid "Seasons view ID"
+msgstr ""
+
+msgctxt "#30453"
+msgid "Episodes view ID"
+msgstr ""
+
+msgctxt "#30454"
+msgid "Collections view ID"
+msgstr ""
+
+msgctxt "#30455"
+msgid "Autoplay first version of an item"
 msgstr ""

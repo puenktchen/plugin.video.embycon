@@ -11,6 +11,7 @@ import urllib.error
 import sys
 import os
 import re
+import base64
 
 from .datamanager import DataManager
 from .downloadutils import DownloadUtils
@@ -74,6 +75,8 @@ def get_content(url, params):
         content_type = 'episodes'
     elif media_type == "playlists":
         view_type = "Playlists"
+    elif media_type == "playlist":
+        view_type = "Playlist"
 
     log.debug("media_type:{0} content_type:{1} view_type:{2} ", media_type, content_type, view_type)
 
@@ -85,15 +88,20 @@ def get_content(url, params):
         progress.update(0, string_load(30113))
 
     # update url for paging
+    start_index_rex = "startindex=([0-9]{1,5})"
+    limit_rex = "&limit=([0-9]{1,5})"
+    limit_rex_p = "&Limit={ItemLimit}"
     start_index = 0
     page_limit = int(settings.getSetting('itemsPerPage'))
+    # if the page_limit in the settings is not set but the url has a limit use the url limit number
+    if page_limit == 0 and re.search(limit_rex, url, flags=re.IGNORECASE):
+        url_limit_result = re.search(limit_rex, url, flags=re.IGNORECASE)
+        page_limit = int(url_limit_result.group(1))
+
     url_prev = None
     url_next = None
     if page_limit > 0 and media_type.lower() in ["movies", "movie", "tvshows"]:
         log.debug("Creating Paging URLS: {0}", url)
-        start_index_rex = "startindex=([0-9]{1,5})"
-        limit_rex = "&limit=([0-9]{1,5})"
-        limit_rex_p = "&Limit={ItemLimit}"
 
         # add StartIndex and Limit to the url if they are not there already
         # update limit to page limit if it is alreayd there
@@ -122,6 +130,10 @@ def get_content(url, params):
 
     # use the data manager to get the data
     # result = dataManager.get_content(url)
+
+    # if this is a playlist then use the episode name format for the episodes
+    if media_type == "playlist":
+        params["name_format"] = "Episode|episode_name_format"
 
     # total_records = 0
     # if result is not None and isinstance(result, dict):
@@ -152,6 +164,8 @@ def get_content(url, params):
             list_item = xbmcgui.ListItem("Prev Page (" + str(start_index - page_limit + 1) + "-" + str(start_index) +
                                          " of " + str(total_records) + ")")
             u = sys.argv[0] + "?url=" + urllib.parse.quote(url_prev) + "&mode=GET_CONTENT&media_type=movies"
+            art = {"thumb": "http://localhost:24276/" + base64.b64encode(url_prev.encode("utf-8")).decode("utf-8")}
+            list_item.setArt(art)
             log.debug("ADDING PREV ListItem: {0} - {1}", u, list_item)
             dir_items.insert(0, (u, list_item, True))
 
@@ -162,6 +176,8 @@ def get_content(url, params):
             list_item = xbmcgui.ListItem("Next Page (" + str(start_index + page_limit + 1) + "-" +
                                          str(upper_count) + " of " + str(total_records) + ")")
             u = sys.argv[0] + "?url=" + urllib.parse.quote(url_next) + "&mode=GET_CONTENT&media_type=movies"
+            art = {"thumb": "http://localhost:24276/" + base64.b64encode(url_next.encode("utf-8")).decode("utf-8")}
+            list_item.setArt(art)
             log.debug("ADDING NEXT ListItem: {0} - {1}", u, list_item)
             dir_items.append((u, list_item, True))
 
@@ -272,10 +288,14 @@ def process_directory(url, progress, params, use_cache_data=False):
             name_format_type = None
             name_format = None
 
+    max_image_width = int(settings.getSetting('max_image_width'))
+
     gui_options = {}
     gui_options["server"] = server
     gui_options["name_format"] = name_format
     gui_options["name_format_type"] = name_format_type
+    gui_options["max_image_width"] = max_image_width
+    gui_options["use_prem_date_for_added"] = settings.getSetting("use_prem_date_for_added") == "true"
 
     use_cache = settings.getSetting("use_cache") == "true" and use_cache_data
     cache_file, item_list, total_records, cache_thread = data_manager.get_items(url, gui_options, use_cache)
@@ -366,7 +386,19 @@ def process_directory(url, progress, params, use_cache_data=False):
             item_details.art["poster"] = item_details.art["tvshow.poster"]
             item_details.art["thumb"] = item_details.art["tvshow.poster"]
 
-        if item_details.is_folder is True:
+        if item_details.item_type == "MusicArtist":
+            u = ('{server}/emby/Users/{userid}/items' +
+                 '?AlbumArtistIds=' + item_details.id +
+                 '&IncludeItemTypes=MusicAlbum' +
+                 '&CollapseBoxSetItems=false' +
+                 '&Recursive=true' +
+                 '&format=json')
+            log.debug("TARGET URL = {0}", u)
+            gui_item = add_gui_item(u, item_details, display_options)
+            if gui_item:
+                dir_items.append(gui_item)
+
+        elif item_details.is_folder is True:
             if item_details.item_type == "Series":
                 u = ('{server}/emby/Shows/' + item_details.id +
                      '/Seasons'
@@ -400,17 +432,6 @@ def process_directory(url, progress, params, use_cache_data=False):
                     dir_items.append(gui_item)
             else:
                 log.debug("Dropping empty folder item : {0}", item_details.__dict__)
-
-        elif item_details.item_type == "MusicArtist":
-            u = ('{server}/emby/Users/{userid}/items' +
-                 '?AlbumArtistIds=' + item_details.id +
-                 '&IncludeItemTypes=MusicAlbum' +
-                 '&CollapseBoxSetItems=false' +
-                 '&Recursive=true' +
-                 '&format=json')
-            gui_item = add_gui_item(u, item_details, display_options)
-            if gui_item:
-                dir_items.append(gui_item)
 
         else:
             u = item_details.id

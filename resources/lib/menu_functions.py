@@ -181,12 +181,11 @@ def show_movie_pages(menu_params):
 
     parent_id = menu_params.get("parent_id")
     settings = xbmcaddon.Addon()
-    group_movies = settings.getSetting('group_movies') == "true"
 
     params = {}
     params["IncludeItemTypes"] = "Movie"
-    params["CollapseBoxSetItems"] = str(group_movies)
-    params["GroupItemsIntoCollections"] = str(group_movies)
+    params["CollapseBoxSetItems"] = False
+    params["GroupItemsIntoCollections"] = False
     params["Recursive"] = True
     params["IsMissing"] = False
     params["ImageTypeLimit"] = 0
@@ -219,8 +218,8 @@ def show_movie_pages(menu_params):
 
         params = {}
         params["IncludeItemTypes"] = "Movie"
-        params["CollapseBoxSetItems"] = str(group_movies)
-        params["GroupItemsIntoCollections"] = str(group_movies)
+        params["CollapseBoxSetItems"] = False
+        params["GroupItemsIntoCollections"] = False
         params["Recursive"] = True
         params["IsMissing"] = False
         params["ImageTypeLimit"] = 1
@@ -297,9 +296,6 @@ def show_genre_list(menu_params):
     else:
         result = []
 
-    settings = xbmcaddon.Addon()
-    group_movies = settings.getSetting('group_movies') == "true"
-
     collections = []
     xbmcplugin.setContent(int(sys.argv[1]), 'genres')
 
@@ -313,8 +309,8 @@ def show_genre_list(menu_params):
 
         params = {}
         params["Recursive"] = True
-        params["CollapseBoxSetItems"] = str(group_movies)
-        params["GroupItemsIntoCollections"] = str(group_movies)
+        params["CollapseBoxSetItems"] = False
+        params["GroupItemsIntoCollections"] = False
         params["GenreIds"] = genre.get("Id")
         params["IncludeItemTypes"] = emby_type
         params["ImageTypeLimit"] = 1
@@ -351,13 +347,13 @@ def show_movie_alpha_list(menu_params):
     if server is None:
         return
 
-    group_movies = settings.getSetting('group_movies') == "true"
     parent_id = menu_params.get("parent_id")
 
     url_params = {}
     url_params["IncludeItemTypes"] = "Movie"
     url_params["Recursive"] = True
-    url_params["GroupItemsIntoCollections"] = group_movies
+    url_params["CollapseBoxSetItems"] = False
+    url_params["GroupItemsIntoCollections"] = False
     url_params["UserId"] = "{userid}"
     url_params["SortBy"] = "Name"
     url_params["SortOrder"] = "Ascending"
@@ -384,8 +380,8 @@ def show_movie_alpha_list(menu_params):
 
         params = {}
         params["Fields"] = "{field_filters}"
-        params["CollapseBoxSetItems"] = group_movies
-        params["GroupItemsIntoCollections"] = group_movies
+        params["CollapseBoxSetItems"] = False
+        params["GroupItemsIntoCollections"] = False
         params["Recursive"] = True
         params["IncludeItemTypes"] = "Movie"
         params["SortBy"] = "Name"
@@ -496,6 +492,7 @@ def show_tvshow_pages(menu_params):
     params = {}
     params["IncludeItemTypes"] = "Series"
     params["IsMissing"] = False
+    params["Recursive"] = True
     params["ImageTypeLimit"] = 0
 
     if parent_id:
@@ -527,6 +524,7 @@ def show_tvshow_pages(menu_params):
         params = {}
         params["IncludeItemTypes"] = "Series"
         params["IsMissing"] = False
+        params["Recursive"] = True
         params["ImageTypeLimit"] = 1
         params["SortBy"] = "Name"
         params["SortOrder"] = "Ascending"
@@ -548,13 +546,13 @@ def show_tvshow_pages(menu_params):
         item_data['path'] = item_url
         item_data['media_type'] = 'tvshows'
 
-        item_data["art"] = {"thumb": "http://localhost:24276/" + base64.b64encode(item_url)}
+        item_data["art"] = {"thumb": "http://localhost:24276/" + base64.b64encode(item_url.encode("utf-8")).decode("utf-8")}
 
         collections.append(item_data)
         start_index = start_index + page_limit
 
     for collection in collections:
-        content_url = urllib.quote(collection['path'])
+        content_url = urllib.parse.quote(collection['path'])
         url = sys.argv[0] + ("?url=" + content_url +
                              "&mode=GET_CONTENT" +
                              "&media_type=" + collection["media_type"])
@@ -1056,6 +1054,8 @@ def display_movies_type(menu_params, view):
     params["SortBy"] = "DatePlayed"
     params["SortOrder"] = "Descending"
     params["Limit"] = "{ItemLimit}"
+    params["CollapseBoxSetItems"] = False
+    params["GroupItemsIntoCollections"] = False
     path = get_emby_url("{server}/emby/Users/{userid}/Items", params)
     url = sys.argv[0] + "?url=" + urllib.parse.quote(path) + "&mode=GET_CONTENT&media_type=movies&sort=none"
     add_menu_directory_item(view_name + string_load(30267) + " (" + show_x_filtered_items + ")", url)
@@ -1069,6 +1069,8 @@ def display_movies_type(menu_params, view):
     params["SortOrder"] = "Descending"
     params["Filters"] = "IsNotFolder"
     params["Limit"] = "{ItemLimit}"
+    params["CollapseBoxSetItems"] = False
+    params["GroupItemsIntoCollections"] = False
     path = get_emby_url("{server}/emby/Users/{userid}/Items", params)
     url = sys.argv[0] + "?url=" + urllib.parse.quote(path) + "&mode=GET_CONTENT&media_type=movies&sort=none"
     add_menu_directory_item(view_name + string_load(30268) + " (" + show_x_filtered_items + ")", url)
@@ -1138,6 +1140,9 @@ def display_library_views(params):
     if server is None:
         return
 
+    settings = xbmcaddon.Addon()
+    max_image_width = int(settings.getSetting('max_image_width'))
+
     data_manager = DataManager()
     views_url = "{server}/emby/Users/{userid}/Views?format=json"
     views = data_manager.get_content(views_url)
@@ -1152,8 +1157,8 @@ def display_library_views(params):
         item_type = view.get('Type', None)
         if collection_type in view_types or item_type == "Channel":
             view_name = view.get("Name")
-            art = get_art(item=view, server=server)
-            art['landscape'] = downloadUtils.get_artwork(view, "Primary", server=server)
+            art = get_art(item=view, server=server, maxwidth=max_image_width)
+            art['landscape'] = downloadUtils.get_artwork(view, "Primary", server=server, maxwidth=max_image_width)
 
             plugin_path = "plugin://plugin.video.embycon/?mode=SHOW_ADDON_MENU&type=library_item&view_id=" + view.get("Id")
 
@@ -1296,6 +1301,9 @@ def set_library_window_values(force=False):
     result = result.get("Items")
     server = downloadUtils.get_server()
 
+    settings = xbmcaddon.Addon()
+    max_image_width = int(settings.getSetting('max_image_width'))
+
     index = 0
     for item in result:
 
@@ -1317,7 +1325,7 @@ def set_library_window_values(force=False):
             home_window.set_property(prop_name, collection_type)
             log.debug("set_library_window_values: plugin.video.embycon-{0}={1}", prop_name, collection_type)
 
-            thumb = downloadUtils.get_artwork(item, "Primary", server=server)
+            thumb = downloadUtils.get_artwork(item, "Primary", server=server, maxwidth=max_image_width)
             prop_name = "view_item.%i.thumb" % index
             home_window.set_property(prop_name, thumb)
             log.debug("set_library_window_values: plugin.video.embycon-{0}={1}", prop_name, thumb)

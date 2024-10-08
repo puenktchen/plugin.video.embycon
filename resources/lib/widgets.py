@@ -96,8 +96,12 @@ def set_background_image(force=False):
             items = results.get("Items", [])
             background_current_item = 0
             background_items = []
+
+            settings = xbmcaddon.Addon()
+            max_image_width = int(settings.getSetting('max_image_width'))
+
             for item in items:
-                bg_image = downloadUtils.get_artwork(item, "Backdrop", server=server)
+                bg_image = downloadUtils.get_artwork(item, "Backdrop", server=server, maxwidth=max_image_width)
                 if bg_image:
                     label = item.get("Name")
                     item_background = {}
@@ -305,7 +309,7 @@ def get_widget_content(handle, params):
         url_params["Ids"] = "{random_movies}"
 
     elif widget_type == "recent_tvshows":
-        xbmcplugin.setContent(handle, 'episodes')
+        xbmcplugin.setContent(handle, 'tvshows')
         url_verb = '{server}/emby/Users/{userid}/Items/Latest'
         url_params["GroupItems"] = True
         #url_params["Limit"] = 200

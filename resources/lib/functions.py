@@ -636,12 +636,12 @@ def show_menu(params):
 
     elif selected_action == "view_season":
         xbmc.executebuiltin("Dialog.Close(all,true)")
-        parent_id = result["ParentId"]
+        season_id = result["SeasonId"]
         series_id = result["SeriesId"]
         u = ('{server}/emby/Shows/' + series_id +
              '/Episodes'
              '?userId={userid}' +
-             '&seasonId=' + parent_id +
+             '&seasonId=' + season_id +
              '&IsVirtualUnAired=false' +
              '&IsMissing=false' +
              '&Fields=SpecialEpisodeNumbers,{field_filters}' +
@@ -715,7 +715,7 @@ def search_results_person(params):
     person_id = params.get("person_id")
     details_url = ('{server}/emby/Users/{userid}/items' +
                    '?PersonIds=' + person_id +
-                   # '&IncludeItemTypes=Movie' +
+                   '&IncludeItemTypes=Episode,Movie,Series' +
                    '&Recursive=true' +
                    '&Fields={field_filters}' +
                    '&format=json')
@@ -854,6 +854,9 @@ def search_results(params):
 
         person_items = person_search_results.get("Items", [])
 
+        settings = xbmcaddon.Addon()
+        max_image_width = int(settings.getSetting('max_image_width'))
+
         server = downloadUtils.get_server()
         list_items = []
         for item in person_items:
@@ -861,7 +864,7 @@ def search_results(params):
             person_name = item.get('Name')
             # image_tags = item.get('ImageTags', {})
             # image_tag = image_tags.get('PrimaryImageTag', '')
-            person_thumbnail = downloadUtils.get_artwork(item, "Primary", server=server)
+            person_thumbnail = downloadUtils.get_artwork(item, "Primary", server=server, maxwidth=max_image_width)
 
             action_url = sys.argv[0] + "?mode=NEW_SEARCH_PERSON&person_id=" + person_id
 
