@@ -1307,11 +1307,23 @@ class Service(xbmc.Player):
 class PlaybackService(xbmc.Monitor):
     background_image_cache_thread = None
 
+    settings = xbmcaddon.Addon()
+    remote_control = settings.getSetting('websocket_enabled') == "true"
+    websocket_client = WebSocketClient(library_change_monitor)
+
     def __init__(self, monitor):
         self.monitor = monitor
 
     def onNotification(self, sender, method, data):
         log.debug("PlaybackService:onNotification:{0}:{1}:{2}", sender, method, data)
+
+        if method == 'System.OnSleep':
+            if remote_control:
+                websocket_client.stop_client()
+
+        if method == 'System.OnWake':
+            if remote_control:
+                websocket_client.start()
 
         if method == 'GUI.OnScreensaverActivated':
             self.screensaver_activated()
